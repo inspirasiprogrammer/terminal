@@ -14,6 +14,7 @@ cbuffer ConstantBuffer : register(b0)
     uint2 cellSize;
     uint cellCountX;
     uint backgroundColor;
+    uint selectionColor;
 };
 StructuredBuffer<Cell> cells : register(t0);
 Texture2D<float4> glyphs : register(t1);
@@ -63,6 +64,11 @@ float4 main(float4 pos: SV_Position): SV_Target
     if (cell.flags & 1)
     {
         color = abs(glyphs[cellPos].rgb - color);
+    }
+    if (cell.flags & 2)
+    {
+        float4 sc = decodeRGB(selectionColor);
+        color = lerp(color, sc.rgb, sc.a);
     }
 
     return float4(color, 1);

@@ -223,6 +223,7 @@ namespace Microsoft::Console::Render
             u32x2 cellSize;
             u32 cellCountX;
             u32 backgroundColor;
+            u32 selectionColor;
 #pragma warning(suppress : 4324) // structure was padded due to alignment specifier
         };
 
@@ -353,6 +354,7 @@ namespace Microsoft::Console::Render
             u32x2 currentColor{};
             glyph_entry attributes{};
             u32 backgroundColor = ~u32(0);
+            u32 selectionColor = 0x7fffffff;
         } _rapi;
 
         invalidation_flags _invalidations = invalidation_flags::device;

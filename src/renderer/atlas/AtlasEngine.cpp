@@ -353,6 +353,17 @@ CATCH_RETURN()
 
 [[nodiscard]] HRESULT AtlasEngine::PaintSelection(const SMALL_RECT rect) noexcept
 {
+    const auto width = rect.Right - rect.Left;
+    auto row = _getCell(rect.Left, rect.Top);
+
+    for (auto x = rect.Top, x1 = rect.Bottom; x < x1; ++x, row += _api.cellCount.x)
+    {
+        for (auto data = row, dataEnd = row + width; data != dataEnd; ++data)
+        {
+            data->flags |= 2;
+        }
+    }
+
     return S_OK;
 }
 
@@ -532,6 +543,13 @@ void AtlasEngine::SetRetroTerminalEffect(bool enable) noexcept
 
 void AtlasEngine::SetSelectionBackground(const COLORREF color, const float alpha) noexcept
 {
+    const u32 selectionColor = color | static_cast<u32>(std::lroundf(alpha * 255.0f)) << 24;
+
+    if (_rapi.selectionColor != selectionColor)
+    {
+        _rapi.selectionColor = selectionColor;
+        WI_SetFlag(_invalidations, invalidation_flags::cbuffer);
+    }
 }
 
 void AtlasEngine::SetSoftwareRendering(bool enable) noexcept
@@ -934,6 +952,7 @@ void AtlasEngine::_updateConstantBuffer()
     data.cellSize.y = _api.cellSize.y;
     data.cellCountX = _api.cellCount.x;
     data.backgroundColor = _rapi.backgroundColor;
+    data.selectionColor = _rapi.selectionColor;
     _r.deviceContext->UpdateSubresource(_r.constantBuffer.get(), 0, nullptr, &data, 0, 0);
 }
 
