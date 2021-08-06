@@ -155,15 +155,14 @@ winrt::Microsoft::Terminal::Settings::Model::CascadiaSettings CascadiaSettings::
         const auto hardcodedDefaultGuid = resultPtr->GlobalSettings().DefaultProfile();
 
         std::optional<std::string> fileData = _ReadUserSettings();
-        const bool foundFile = fileData.has_value();
 
         // Make sure the file isn't totally empty. If it is, we'll treat the file
         // like it doesn't exist at all.
-        const bool fileHasData = foundFile && !fileData.value().empty();
+        const bool fileHasData = fileData && !fileData->empty();
         bool needToWriteFile = false;
         if (fileHasData)
         {
-            resultPtr->_ParseJsonString(fileData.value(), false);
+            resultPtr->_ParseJsonString(*fileData, false);
         }
 
         // Load profiles from dynamic profile generators. _userSettings should be
@@ -202,6 +201,32 @@ winrt::Microsoft::Terminal::Settings::Model::CascadiaSettings CascadiaSettings::
         catch (...)
         {
             _CatchRethrowSerializationExceptionWithLocationInfo(resultPtr->_userSettingsString);
+        }
+
+        {
+            const auto state = winrt::get_self<implementation::ApplicationState>(ApplicationState::SharedInstance());
+            auto generatedProfiles = state->GeneratedProfiles();
+            bool generatedProfilesChanged = false;
+
+            for (auto profile : resultPtr->_allProfiles)
+            {
+                if (profile.Origin() != OriginTag::User)
+                {
+                    if (generatedProfiles.emplace(profile.Guid()).second)
+                    {
+                        generatedProfilesChanged = true;
+                    }
+                    else
+                    {
+                        profile.Hidden(true);
+                    }
+                }
+            }
+
+            if (generatedProfilesChanged)
+            {
+                state->GeneratedProfiles(generatedProfiles);
+            }
         }
 
         // After layering the user settings, check if there are any new profiles
@@ -352,7 +377,6 @@ void CascadiaSettings::_LoadDynamicProfiles()
         }
     }
 
-    const GUID nullGuid{ 0 };
     for (auto& generator : _profileGenerators)
     {
         const std::wstring generatorNamespace{ generator->GetNamespace() };
