@@ -1330,6 +1330,7 @@ LPWINDOWPOS
 lpwpos
 lpwstr
 LRESULT
+lroundf
 lru
 lsb
 lsconfig
@@ -1731,6 +1732,7 @@ pdx
 peb
 PEMAGIC
 PENDTASKMSG
+Pentium
 pfa
 PFACENODE
 pfed

@@ -218,7 +218,8 @@ void Window::_UpdateSystemMetrics() const
 #endif
     try
     {
-        switch (useDx){
+        switch (useDx)
+        {
 #if TIL_FEATURE_CONHOSTDXENGINE_ENABLED
         case 1:
             pDxEngine = new DxEngine();

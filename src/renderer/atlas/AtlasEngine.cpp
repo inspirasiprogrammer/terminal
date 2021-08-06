@@ -409,7 +409,12 @@ CATCH_RETURN()
 
 [[nodiscard]] HRESULT AtlasEngine::UpdateDpi(const int dpi) noexcept
 {
-    _api.dpi = yolo_narrow<u16>(dpi);
+    const auto newDPI = yolo_narrow<u16>(dpi);
+    if (_api.dpi != newDPI)
+    {
+        _api.dpi = newDPI;
+        WI_SetFlag(_invalidations, invalidation_flags::font);
+    }
     return S_OK;
 }
 
@@ -429,14 +434,16 @@ CATCH_RETURN()
     DWRITE_TEXT_METRICS metrics;
     RETURN_IF_FAILED(textLayout->GetMetrics(&metrics));
 
+    const auto scaling = GetScaling();
+
     fontInfo.SetFromEngine(
         fontInfoDesired.GetFaceName(),
         fontInfoDesired.GetFamily(),
         fontInfoDesired.GetWeight(),
         false,
         COORD{
-            gsl::narrow_cast<SHORT>(std::ceil(metrics.width)),
-            gsl::narrow_cast<SHORT>(std::ceil(metrics.height)),
+            yolo_narrow<SHORT>(std::ceil(metrics.width * scaling)),
+            yolo_narrow<SHORT>(std::ceil(metrics.height * scaling)),
         },
         fontInfoDesired.GetEngineSize());
     return S_OK;
@@ -590,6 +597,9 @@ void AtlasEngine::ToggleShaderEffects()
 
     if (auto newSize = yolo_vec2<u16>(fontInfo.GetSize()); _api.cellSize != newSize)
     {
+        const auto scaling = GetScaling();
+        _api.cellSizeDIP.x = newSize.x / scaling;
+        _api.cellSizeDIP.y = newSize.y / scaling;
         _api.cellSize = newSize;
         _api.cellCount = _api.sizeInPixel / _api.cellSize;
         WI_SetFlag(_invalidations, invalidation_flags::size);
@@ -964,6 +974,25 @@ wil::com_ptr<IDWriteTextFormat> AtlasEngine::_createTextFormat(const wchar_t* fo
     return textFormat;
 }
 
+AtlasEngine::u16x2 AtlasEngine::_allocateAtlasCell() noexcept
+{
+    const auto ret = _r.atlasPosition;
+
+    _r.atlasPosition.x += _api.cellSize.x;
+    if (_r.atlasPosition.x >= _r.atlasSizeInPixel.x)
+    {
+        _r.atlasPosition.x = 0;
+        _r.atlasPosition.y += _api.cellSize.y;
+        if (_r.atlasPosition.y >= _r.atlasSizeInPixel.y)
+        {
+            _r.atlasPosition.x = _api.cellSize.x;
+            _r.atlasPosition.y = 0;
+        }
+    }
+
+    return ret;
+}
+
 void AtlasEngine::_drawGlyph(const til::pair<glyph_entry, std::array<u16x2, 2>>& pair)
 {
     wchar_t chars[2];
@@ -977,13 +1006,13 @@ void AtlasEngine::_drawGlyph(const til::pair<glyph_entry, std::array<u16x2, 2>>&
     D2D1_RECT_F rect;
     rect.left = 0;
     rect.top = 0;
-    rect.right = static_cast<float>(cells * _api.cellSize.x);
-    rect.bottom = static_cast<float>(_api.cellSize.y);
+    rect.right = cells * _api.cellSizeDIP.x;
+    rect.bottom = _api.cellSizeDIP.y;
 
     {
         // See D2DFactory::DrawText
         wil::com_ptr<IDWriteTextLayout> textLayout;
-        THROW_IF_FAILED(_sr.dwriteFactory->CreateTextLayout(chars, charsLength, textFormat, static_cast<float>(cells * _api.cellSize.x), static_cast<float>(_api.cellSize.y), textLayout.put()));
+        THROW_IF_FAILED(_sr.dwriteFactory->CreateTextLayout(chars, charsLength, textFormat, rect.right, rect.bottom, textLayout.put()));
 
         _r.d2dRenderTarget->BeginDraw();
         _r.d2dRenderTarget->Clear();
@@ -1007,9 +1036,9 @@ void AtlasEngine::_drawCursor()
 {
     D2D1_RECT_F rect;
     rect.left = 0;
-    rect.top = static_cast<float>(_api.cellSize.y) * 0.81f;
-    rect.right = static_cast<float>(_api.cellSize.x);
-    rect.bottom = static_cast<float>(_api.cellSize.y);
+    rect.top = _api.cellSizeDIP.y * 0.81f;
+    rect.right = _api.cellSizeDIP.x;
+    rect.bottom = _api.cellSizeDIP.y;
 
     _r.d2dRenderTarget->BeginDraw();
     _r.d2dRenderTarget->Clear();

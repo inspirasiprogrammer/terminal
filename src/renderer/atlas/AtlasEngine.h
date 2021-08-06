@@ -184,6 +184,7 @@ namespace Microsoft::Console::Render
         using u32 = uint32_t;
         using u32x2 = vec2<u32>;
         using f32 = float;
+        using f32x2 = vec2<f32>;
         using f32x4 = vec4<f32>;
 
         union glyph_entry
@@ -264,6 +265,7 @@ namespace Microsoft::Console::Render
         // text handling
         inline IDWriteTextFormat* _getTextFormat(bool bold, bool italic) const noexcept { return _r.textFormats[italic][bold].get(); }
         wil::com_ptr<IDWriteTextFormat> _createTextFormat(const wchar_t* fontFamilyName, DWRITE_FONT_WEIGHT fontWeight, DWRITE_FONT_STYLE fontStyle, float fontSize, const wchar_t* localeName) const;
+        u16x2 _allocateAtlasCell() noexcept;
         void _drawGlyph(const til::pair<glyph_entry, std::array<u16x2, 2>>& pair);
         void _drawCursor();
         void _copyScratchpadCell(uint32_t scratchpadIndex, u16x2 target, uint32_t copyFlags = 0);
@@ -272,25 +274,6 @@ namespace Microsoft::Console::Render
         inline cell* _getCell(T1 x, T2 y) noexcept
         {
             return _r.cells.data() + static_cast<size_t>(_api.cellCount.x) * y + x;
-        }
-
-        u16x2 _allocateAtlasCell() noexcept
-        {
-            const auto ret = _r.atlasPosition;
-
-            _r.atlasPosition.x += _api.cellSize.x;
-            if (_r.atlasPosition.x >= _r.atlasSizeInPixel.x)
-            {
-                _r.atlasPosition.x = 0;
-                _r.atlasPosition.y += _api.cellSize.y;
-                if (_r.atlasPosition.y >= _r.atlasSizeInPixel.y)
-                {
-                    _r.atlasPosition.x = _api.cellSize.x;
-                    _r.atlasPosition.y = 0;
-                }
-            }
-
-            return ret;
         }
 
         struct static_resources
@@ -334,9 +317,10 @@ namespace Microsoft::Console::Render
 
         struct api_state
         {
-            u16x2 sizeInPixel; // invalidation_flags::size
+            f32x2 cellSizeDIP; // invalidation_flags::font
             u16x2 cellSize; // invalidation_flags::size
-            u16x2 cellCount; // dependent value calculated from the prior 2
+            u16x2 cellCount; // caches `sizeInPixel / cellSize`
+            u16x2 sizeInPixel; // invalidation_flags::size
 
             std::wstring fontName; // invalidation_flags::font|size
             u16 fontSize = 0; // invalidation_flags::font|size
